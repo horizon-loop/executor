@@ -186,11 +186,14 @@ function SidebarContent(props: {
           <Link to="/{-$orgSlug}" className="desktop-macos-no-drag flex shrink-0 items-center">
             <Wordmark />
           </Link>
-          <div className="desktop-macos-no-drag ml-auto flex min-w-0 flex-1 justify-end pl-3">
-            <ServerConnectionMenu variant="header" />
-          </div>
         </div>
       )}
+
+      {/* horizon-loop fork: the server profile is a full-width dropdown showing
+          the active profile, on every viewport (was an icon in the header). */}
+      <div className="desktop-macos-no-drag shrink-0 border-b border-sidebar-border p-2">
+        <ServerConnectionMenu side="bottom" align="start" />
+      </div>
 
       <nav className="flex flex-1 flex-col overflow-y-auto p-2">
         <NavItem
