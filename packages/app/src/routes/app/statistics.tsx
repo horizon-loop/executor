@@ -3,7 +3,10 @@ import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Data, Effect, Option, Schema } from "effect";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import { createFileRoute } from "@tanstack/react-router";
-import { getExecutorServerAuthorizationHeader } from "@executor-js/react/api/server-connection";
+import {
+  getExecutorApiBaseUrl,
+  getExecutorServerAuthorizationHeader,
+} from "@executor-js/react/api/server-connection";
 import { useExecutorDocumentTitle } from "@executor-js/react/lib/document-title";
 
 import { StatisticsPage } from "../../web/statistics-page";
@@ -132,14 +135,15 @@ export type { StatsLoadError };
 const statsAtom = Atom.family((range: StatsRange) =>
   Atom.make(
     Effect.gen(function* () {
-      // `/api/stats` is bearer-gated like the rest of /api. Standalone web reads
-      // the bearer from localStorage; on desktop the main process injects it, so
-      // this is null and we send none.
+      // `/api/stats` is bearer-gated like the rest of /api, and served by the
+      // ACTIVE server (the switcher can point at another daemon than the one
+      // that served this page). Standalone web carries the bearer; on desktop
+      // the main process injects it, so this is null and we send none.
       const authorization = getExecutorServerAuthorizationHeader();
       const response = yield* Effect.tryPromise({
         try: () =>
           fetch(
-            `/api/stats?range=${encodeURIComponent(range)}`,
+            `${getExecutorApiBaseUrl()}/stats?range=${encodeURIComponent(range)}`,
             authorization ? { headers: { authorization } } : undefined,
           ),
         catch: () => new StatsLoadError({ message: "Failed to load statistics." }),

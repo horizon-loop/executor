@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { bootstrapLocalAuthToken } from "@executor-js/react/api/local-auth";
+import { importServerProfilesFromFragment } from "./web/import-server-profiles";
 import { getRouter } from "./router";
 import { initDesktopCrashReporting } from "./crash-reporting";
 import { installServerDisconnectedRecovery } from "./server-disconnected";
@@ -16,6 +17,9 @@ installServerDisconnectedRecovery();
 if ("executor" in window && navigator.platform.includes("Mac")) {
   document.documentElement.classList.add("executor-desktop-macos");
 }
+
+// Merge any `#servers=` profiles (scripts/profiles.sh open) into the switcher.
+importServerProfilesFromFragment();
 
 // Resolve the local bearer token (?_token → localStorage → dev global) and set
 // the connection's auth BEFORE the router mounts, so the first API atom carries
