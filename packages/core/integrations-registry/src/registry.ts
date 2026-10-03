@@ -129,7 +129,8 @@ export const layer = (
       const lockFile = `${cacheFile}.lock`;
       const ttl = Duration.fromInputUnsafe(config.cacheTtl ?? Duration.hours(12));
       const refreshEvery = Duration.fromInputUnsafe(config.refreshInterval ?? Duration.hours(12));
-      const disabled = config.disabled ?? isFetchDisabled();
+      // horizon-loop fork: never fetch the integrations.sh registry unless a caller opts in.
+      const disabled = config.disabled ?? true;
 
       const isFresh = Effect.gen(function* () {
         const stat = yield* fs.stat(cacheFile).pipe(Effect.catch(() => Effect.succeed(undefined)));

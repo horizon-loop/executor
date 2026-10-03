@@ -948,7 +948,8 @@ const promptInstallUpdate = async (version: string) => {
 const UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 const setupAutoUpdater = () => {
-  if (!app.isPackaged) return;
+  // horizon-loop fork: no automatic update checks (they poll upstream's GitHub releases).
+  if (!app.isPackaged || process.env.EXECUTOR_ENABLE_AUTO_UPDATE !== "1") return;
   autoUpdater.logger = log;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = false;

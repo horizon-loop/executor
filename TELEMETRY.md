@@ -1,5 +1,13 @@
 # Telemetry
 
+> **horizon-loop fork:** none of the outbound calls below happen by default.
+> PostHog analytics, the integrations.sh registry fetch, and the npm update
+> check are off unless code opts in; the web console blocks third-party images
+> (Content-Security-Policy `img-src`) and never calls the integrations.sh
+> catalog; the desktop app only checks for updates with
+> `EXECUTOR_ENABLE_AUTO_UPDATE=1`. Crash reporting stays off because fork
+> builds carry no Sentry DSN. Upstream's description follows unchanged.
+
 Executor's local products (the CLI, the desktop app) and self-hosted
 deployments send a small set of anonymous usage events. This document is the
 complete account of what is sent, what is deliberately not sent, why the

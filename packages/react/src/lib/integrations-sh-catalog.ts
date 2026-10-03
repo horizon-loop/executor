@@ -82,6 +82,12 @@ class CatalogRequestError extends Data.TaggedError("CatalogRequestError")<{
 
 const fetchCatalogJson = (url: URL): Effect.Effect<unknown, CatalogRequestError> =>
   Effect.gen(function* () {
+    // horizon-loop fork: the public catalog is a third-party service; the console never calls it.
+    if (url.origin === INTEGRATIONS_SH_ORIGIN) {
+      return yield* new CatalogRequestError({
+        message: "The public catalog is disabled in this build.",
+      });
+    }
     const response = yield* Effect.tryPromise({
       // ALWAYS REVALIDATE. The catalog is a live service and its corrections
       // must reach the console immediately, but the browser will honour

@@ -153,7 +153,8 @@ export const layer = (
 ): Layer.Layer<Analytics, never, HttpClient.HttpClient | FileSystem.FileSystem> =>
   Layer.effect(Analytics)(
     Effect.gen(function* () {
-      const disabled = config.disabled ?? isAnalyticsDisabled();
+      // horizon-loop fork: product analytics are off unless a caller opts in.
+      const disabled = config.disabled ?? true;
       if (disabled) return analyticsNoop;
 
       const http = yield* HttpClient.HttpClient;

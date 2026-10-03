@@ -214,7 +214,9 @@ const overrideFromEnv = (env: Record<string, string | undefined>): DistTags | nu
  * never throws.
  */
 export const resolveDistTags = async (options?: ResolveDistTagsOptions): Promise<DistTags> => {
-  const env = options?.env ?? ambientEnv();
+  // horizon-loop fork: running products never ask npm for updates; only callers
+  // passing an explicit env (tests) reach the registry.
+  const env = options?.env ?? { ...ambientEnv(), EXECUTOR_DISABLE_UPDATE_CHECK: "1" };
   if (env.EXECUTOR_DISABLE_UPDATE_CHECK) return {};
 
   const override = overrideFromEnv(env);
