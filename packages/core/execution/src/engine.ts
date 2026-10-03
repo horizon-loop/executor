@@ -12,6 +12,7 @@ import type {
 } from "@executor-js/sdk/core";
 import {
   CurrentOrgWriteAccess,
+  isToolResult,
   offeredPersistence,
   type OrgWriteAccessState,
 } from "@executor-js/sdk/core";
@@ -36,7 +37,62 @@ export type ExecutionEngineConfig<E extends Cause.YieldableError = CodeExecution
   readonly executor: Executor;
   readonly codeExecutor: CodeExecutor<E>;
   readonly toolDiscoveryProvider?: ToolDiscoveryProvider;
+  /** Observes every `tools.*` call sandbox code makes, after it settles.
+   *  Synchronous and best-effort: hosts record usage statistics here and must
+   *  not block or fail the call. */
+  readonly onToolCall?: (event: ToolCallEvent) => void;
 };
+
+/** Built-in discovery paths the sandbox calls on `tools` (not integration tools). */
+const DISCOVERY_TOOL_PATHS: Readonly<Record<string, true>> = {
+  search: true,
+  "describe.tool": true,
+  "executor.integrations.list": true,
+};
+
+export type ToolCallEvent = {
+  /** The sandbox path as written after `tools.` (e.g. `github.org.main.getRepo`). */
+  readonly path: string;
+  /** `discovery` for `tools.search` / `tools.describe.tool` /
+   *  `tools.executor.integrations.list`; `tool` for everything else. */
+  readonly kind: "tool" | "discovery";
+  readonly ok: boolean;
+  readonly durationMs: number;
+  /** `ToolError.code` for an expected failure; `"exception"` when the call
+   *  itself failed (policy block, declined approval, infra defect). */
+  readonly errorCode: string | null;
+};
+
+const observeToolCalls = (
+  invoker: SandboxToolInvoker,
+  onToolCall: ((event: ToolCallEvent) => void) | undefined,
+): SandboxToolInvoker =>
+  onToolCall === undefined
+    ? invoker
+    : {
+        invoke: (input) =>
+          Effect.suspend(() => {
+            const startedAt = performance.now();
+            return invoker.invoke(input).pipe(
+              Effect.onExit((exit) =>
+                Effect.sync(() => {
+                  const failure = Exit.isFailure(exit)
+                    ? "exception"
+                    : isToolResult(exit.value) && !exit.value.ok
+                      ? exit.value.error.code
+                      : null;
+                  onToolCall({
+                    path: input.path,
+                    kind: Object.hasOwn(DISCOVERY_TOOL_PATHS, input.path) ? "discovery" : "tool",
+                    ok: failure === null,
+                    durationMs: Math.round(performance.now() - startedAt),
+                    errorCode: failure,
+                  });
+                }),
+              ),
+            );
+          }),
+      };
 
 export type ExecutionResult =
   | { readonly status: "completed"; readonly result: ExecuteResult }
@@ -721,11 +777,14 @@ export const createExecutionEngine = <E extends Cause.YieldableError = CodeExecu
       });
 
     const toolPaths: string[] = [];
-    const invoker = makeFullInvoker(
-      executor,
-      { onElicitation: elicitationHandler },
-      toolDiscoveryProvider,
-      (path) => toolPaths.push(path),
+    const invoker = observeToolCalls(
+      makeFullInvoker(
+        executor,
+        { onElicitation: elicitationHandler },
+        toolDiscoveryProvider,
+        (path) => toolPaths.push(path),
+      ),
+      config.onToolCall,
     );
     fiber = yield* Effect.forkDetach(
       codeExecutor.execute(code, invoker).pipe(
@@ -858,13 +917,16 @@ export const createExecutionEngine = <E extends Cause.YieldableError = CodeExecu
       "mcp.execute.code_length": code.length,
     });
     const toolPaths: string[] = [];
-    const invoker = makeFullInvoker(
-      executor,
-      {
-        onElicitation: options.onElicitation,
-      },
-      toolDiscoveryProvider,
-      (path) => toolPaths.push(path),
+    const invoker = observeToolCalls(
+      makeFullInvoker(
+        executor,
+        {
+          onElicitation: options.onElicitation,
+        },
+        toolDiscoveryProvider,
+        (path) => toolPaths.push(path),
+      ),
+      config.onToolCall,
     );
     const result = yield* codeExecutor.execute(code, invoker).pipe(
       Effect.map((result) => (toolPaths.length === 0 ? result : { ...result, toolPaths })),

@@ -63,6 +63,18 @@ install count as one install, not ten. It is not derived from your machine,
 account, or network, and deleting the file resets it. When telemetry is
 disabled the file is never created.
 
+## Local statistics (never sent)
+
+Separately from telemetry, the local daemon (CLI and desktop) records usage
+for the web UI's **Statistics** page in `stats.db` in the data directory:
+which MCP client ran each execution (its self-reported `clientInfo` name and
+version), the sandbox tool paths it called, outcomes, `ToolError` codes,
+timings, and size estimates (characters / 4) of the tool list each session
+loaded and of the code and results each execution exchanged. It never
+records code, tool arguments, tool results, or error messages themselves.
+Nothing in it is transmitted; it is read only by `GET /api/stats` on this
+machine. Delete the file to reset it.
+
 ## Opting out
 
 Set either environment variable to `1`, `true`, or `yes`:

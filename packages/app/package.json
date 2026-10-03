@@ -31,7 +31,8 @@
     "effect": "catalog:",
     "lucide-react": "^1.7.0",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "recharts": "3.8.0"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",

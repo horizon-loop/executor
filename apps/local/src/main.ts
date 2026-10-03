@@ -6,10 +6,19 @@ import { artifactUrlFor } from "@executor-js/host-mcp/create-artifact";
 import { loadMcpAppsShellHtml } from "@executor-js/mcp-apps-shell";
 import { smokeRenderArtifact } from "@executor-js/mcp-apps-shell/smoke-render";
 import { makeQuickJsExecutor } from "@executor-js/runtime-quickjs";
+import type { Executor } from "@executor-js/sdk";
 import { localAnalytics } from "./analytics";
 import { makeLocalApiHandler } from "./app";
 import { createExecutorHandle, disposeExecutor, getExecutorBundle } from "./executor";
 import { createMcpRequestHandler, type McpRequestHandler } from "./mcp";
+import {
+  disposeLocalStats,
+  estimateCatalog,
+  getLocalStats,
+  makeStatsRequestHandler,
+  withExecutionStats,
+  type StatsSession,
+} from "./stats";
 
 // ---------------------------------------------------------------------------
 // Local server handlers.
@@ -38,10 +47,17 @@ export type ServerHandlers = {
     readonly dispose: () => Promise<void>;
   };
   readonly mcp: McpRequestHandler;
+  /** `GET /api/stats` — the web UI's Statistics page (local-only, outside the typed API). */
+  readonly stats: (request: Request) => Promise<Response>;
 };
 
 class ServerHandlersDisposeError extends Data.TaggedError("ServerHandlersDisposeError")<{
-  readonly operation: "api.dispose" | "mcp.close" | "disposeExecutor" | "runtime.dispose";
+  readonly operation:
+    | "api.dispose"
+    | "mcp.close"
+    | "stats.close"
+    | "disposeExecutor"
+    | "runtime.dispose";
   readonly cause: unknown;
 }> {}
 
@@ -68,6 +84,7 @@ const closeServerHandlers = async (handlers: ServerHandlers): Promise<void> => {
       // after the surfaces are closed so server shutdown (and failed startup
       // cleanup via disposeServerHandlers) releases the owned data-dir lock.
       yield* ignoreDisposeFailure("disposeExecutor", () => disposeExecutor());
+      yield* ignoreDisposeFailure("stats.close", () => disposeLocalStats());
     }),
   );
 };
@@ -87,17 +104,32 @@ export const createServerHandlers = async (token: string): Promise<ServerHandler
     // part of the shared API). Reuse the shared boot bundle so the MCP executor is
     // byte-identical to the one the API serves.
     const { executor, webBaseUrl } = await getExecutorBundle();
-    // Both engines below serve MCP endpoints, so the wrap binds the "mcp"
-    // plane structurally; the toolkit-scoped engine additionally marks
+    const stats = getLocalStats();
+    // One engine per MCP session, so every execution and sandbox tool call is
+    // recorded under the session's client (`clientInfo.name`). Engines are
+    // cheap (QuickJS spins up per execution) and a session's paused executions
+    // already live in its own engine (`sessionEngines` in ./mcp).
+    //
+    // Both planes below serve MCP endpoints, so the analytics wrap binds the
+    // "mcp" plane structurally; the toolkit-scoped engine additionally marks
     // `toolkit` (the slug itself is a user label and never recorded).
-    const engine = withExecutionAnalytics(
-      createExecutionEngine({
-        executor,
-        codeExecutor: makeQuickJsExecutor(),
-      }),
-      localAnalytics,
-      { plane: "mcp", toolkit: false },
-    );
+    const makeMcpEngine = (
+      engineExecutor: Executor,
+      toolkit: boolean,
+      session: StatsSession | undefined,
+    ) => {
+      const engine = withExecutionAnalytics(
+        createExecutionEngine({
+          executor: engineExecutor,
+          codeExecutor: makeQuickJsExecutor(),
+          ...(session ? { onToolCall: session.recordToolCall } : {}),
+        }),
+        localAnalytics,
+        { plane: "mcp", toolkit },
+      );
+      return session ? withExecutionStats(engine, session) : engine;
+    };
+    const defaultEngine = makeMcpEngine(executor, false, undefined);
     // The generative-UI surface, shared by every resource this daemon serves.
     // Each toolkit gets its own executor, so `artifacts` is bound per resource
     // below rather than hoisted with the rest.
@@ -120,7 +152,7 @@ export const createServerHandlers = async (token: string): Promise<ServerHandler
     };
     mcp = createMcpRequestHandler({
       defaultConfig: {
-        engine,
+        engine: defaultEngine,
         artifacts: executor.artifacts,
         connections: executor.connections,
         tools: executor.tools,
@@ -128,17 +160,19 @@ export const createServerHandlers = async (token: string): Promise<ServerHandler
         ...appsConfig,
       },
       webBaseUrl: process.env.EXECUTOR_WEB_BASE_URL || undefined,
-      createConfigForResource: async (resource) => {
+      stats,
+      createConfigForResource: async (resource, session) => {
         if (resource.kind === "default") {
           return {
             config: {
-              engine,
+              engine: makeMcpEngine(executor, false, session),
               artifacts: executor.artifacts,
               connections: executor.connections,
               tools: executor.tools,
               integrations: executor.integrations,
               ...appsConfig,
             },
+            estimateCatalog: () => estimateCatalog(executor),
           };
         }
         // Borrow the running server's DB handle: this process already holds the
@@ -149,29 +183,26 @@ export const createServerHandlers = async (token: string): Promise<ServerHandler
           activeToolkitSlug: resource.slug,
           borrowedDb: (await getExecutorBundle()).db,
         });
-        const toolkitEngine = withExecutionAnalytics(
-          createExecutionEngine({
-            executor: handle.executor,
-            codeExecutor: makeQuickJsExecutor(),
-          }),
-          localAnalytics,
-          { plane: "mcp", toolkit: true },
-        );
         return {
           config: {
-            engine: toolkitEngine,
+            engine: makeMcpEngine(handle.executor, true, session),
             artifacts: handle.executor.artifacts,
             connections: handle.executor.connections,
             tools: handle.executor.tools,
             integrations: handle.executor.integrations,
             ...appsConfig,
           },
+          estimateCatalog: () => estimateCatalog(handle.executor),
           close: handle.dispose,
         };
       },
     });
 
-    return { api: apiHandler, mcp };
+    return {
+      api: apiHandler,
+      mcp,
+      stats: makeStatsRequestHandler(stats, () => estimateCatalog(executor)),
+    };
   } catch (cause) {
     const partialApiHandler = apiHandler;
     const partialMcp = mcp;

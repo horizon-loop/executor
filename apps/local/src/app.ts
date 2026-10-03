@@ -16,6 +16,7 @@ import { localAnalytics } from "./analytics";
 import { getExecutorBundle, type LocalExecutor } from "./executor";
 import { makeLocalIdentityLayer } from "./identity";
 import { ErrorCaptureLive } from "./observability";
+import { API_AGENT, getLocalStats, withExecutionStats } from "./stats";
 
 // ===========================================================================
 // The LOCAL Executor app, as ONE `ExecutorApp.make` call.
@@ -53,18 +54,30 @@ import { ErrorCaptureLive } from "./observability";
  * `HostConfig`/`CodeExecutorProvider` seams — the fixed executor is the whole
  * execution model.
  */
-const localFixedExecutionLayer = (executor: LocalExecutor): Layer.Layer<FixedExecutionProvider> =>
-  Layer.succeed(FixedExecutionProvider)({
+const localFixedExecutionLayer = (executor: LocalExecutor): Layer.Layer<FixedExecutionProvider> => {
+  // The HTTP executions API (web console, `executor call`/`resume`) records
+  // as one long-lived "Executor API" agent in the local statistics.
+  const stats = getLocalStats().session(() => ({
+    agent: API_AGENT,
+    agentVersion: null,
+    plane: "api",
+    toolkit: false,
+  }));
+  return Layer.succeed(FixedExecutionProvider)({
     executor,
     // This engine serves the HTTP executions API (`executor call`/`resume`,
     // the web console) — the wrap binds the "api" plane structurally.
-    engine: withExecutionAnalytics(
-      createExecutionEngine({
-        executor,
-        codeExecutor: makeQuickJsExecutor(),
-      }),
-      localAnalytics,
-      { plane: "api", toolkit: false },
+    engine: withExecutionStats(
+      withExecutionAnalytics(
+        createExecutionEngine({
+          executor,
+          codeExecutor: makeQuickJsExecutor(),
+          onToolCall: stats.recordToolCall,
+        }),
+        localAnalytics,
+        { plane: "api", toolkit: false },
+      ),
+      stats,
     ),
     // The executor IS its own plugin-extension map (`executor[pluginId]`); the
     // fixed middleware reads `executor[id]` to satisfy each plugin's
@@ -72,6 +85,7 @@ const localFixedExecutionLayer = (executor: LocalExecutor): Layer.Layer<FixedExe
     // `composePluginHandlers(plugins, executor)` boot-bind.
     extensions: executor,
   });
+};
 
 export interface LocalApiHandler {
   /** The unified web handler: serves the typed API (at root — the Bun shell strips `/api`) + /docs. */

@@ -13,6 +13,7 @@ import { Route as DotDotDotDotDotDotReactSrcRoutesIndexRouteImport } from './../
 import { Route as DotDotDotDotDotDotReactSrcRoutesArtifactsRouteImport } from './../../react/src/routes/artifacts'
 import { Route as DotDotDotDotDotDotReactSrcRoutesPoliciesRouteImport } from './../../react/src/routes/policies'
 import { Route as SecretsRouteImport } from './routes/app/secrets'
+import { Route as StatisticsRouteImport } from './routes/app/statistics'
 import { Route as DotDotDotDotDotDotReactSrcRoutesToolkitsRouteImport } from './../../react/src/routes/toolkits'
 import { Route as DotDotDotDotDotDotReactSrcRoutesToolsRouteImport } from './../../react/src/routes/tools'
 import { Route as DotDotDotDotDotDotReactSrcRoutesArtifactsDotartifactIdRouteImport } from './../../react/src/routes/artifacts.$artifactId'
@@ -45,6 +46,11 @@ const DotDotDotDotDotDotReactSrcRoutesPoliciesRoute =
 const SecretsRoute = SecretsRouteImport.update({
   id: '/{-$orgSlug}/secrets',
   path: '/{-$orgSlug}/secrets',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatisticsRoute = StatisticsRouteImport.update({
+  id: '/{-$orgSlug}/statistics',
+  path: '/{-$orgSlug}/statistics',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DotDotDotDotDotDotReactSrcRoutesToolkitsRoute =
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/{-$orgSlug}/artifacts': typeof DotDotDotDotDotDotReactSrcRoutesArtifactsRouteWithChildren
   '/{-$orgSlug}/policies': typeof DotDotDotDotDotDotReactSrcRoutesPoliciesRoute
   '/{-$orgSlug}/secrets': typeof SecretsRoute
+  '/{-$orgSlug}/statistics': typeof StatisticsRoute
   '/{-$orgSlug}/toolkits': typeof DotDotDotDotDotDotReactSrcRoutesToolkitsRouteWithChildren
   '/{-$orgSlug}/tools': typeof DotDotDotDotDotDotReactSrcRoutesToolsRoute
   '/{-$orgSlug}/': typeof DotDotDotDotDotDotReactSrcRoutesIndexRoute
@@ -130,6 +137,7 @@ export interface FileRoutesByTo {
   '/{-$orgSlug}/artifacts': typeof DotDotDotDotDotDotReactSrcRoutesArtifactsRouteWithChildren
   '/{-$orgSlug}/policies': typeof DotDotDotDotDotDotReactSrcRoutesPoliciesRoute
   '/{-$orgSlug}/secrets': typeof SecretsRoute
+  '/{-$orgSlug}/statistics': typeof StatisticsRoute
   '/{-$orgSlug}/toolkits': typeof DotDotDotDotDotDotReactSrcRoutesToolkitsRouteWithChildren
   '/{-$orgSlug}/tools': typeof DotDotDotDotDotDotReactSrcRoutesToolsRoute
   '/{-$orgSlug}': typeof DotDotDotDotDotDotReactSrcRoutesIndexRoute
@@ -147,6 +155,7 @@ export interface FileRoutesById {
   '/{-$orgSlug}/artifacts': typeof DotDotDotDotDotDotReactSrcRoutesArtifactsRouteWithChildren
   '/{-$orgSlug}/policies': typeof DotDotDotDotDotDotReactSrcRoutesPoliciesRoute
   '/{-$orgSlug}/secrets': typeof SecretsRoute
+  '/{-$orgSlug}/statistics': typeof StatisticsRoute
   '/{-$orgSlug}/toolkits': typeof DotDotDotDotDotDotReactSrcRoutesToolkitsRouteWithChildren
   '/{-$orgSlug}/tools': typeof DotDotDotDotDotDotReactSrcRoutesToolsRoute
   '/{-$orgSlug}/': typeof DotDotDotDotDotDotReactSrcRoutesIndexRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/{-$orgSlug}/artifacts'
     | '/{-$orgSlug}/policies'
     | '/{-$orgSlug}/secrets'
+    | '/{-$orgSlug}/statistics'
     | '/{-$orgSlug}/toolkits'
     | '/{-$orgSlug}/tools'
     | '/{-$orgSlug}/'
@@ -181,6 +191,7 @@ export interface FileRouteTypes {
     | '/{-$orgSlug}/artifacts'
     | '/{-$orgSlug}/policies'
     | '/{-$orgSlug}/secrets'
+    | '/{-$orgSlug}/statistics'
     | '/{-$orgSlug}/toolkits'
     | '/{-$orgSlug}/tools'
     | '/{-$orgSlug}'
@@ -197,6 +208,7 @@ export interface FileRouteTypes {
     | '/{-$orgSlug}/artifacts'
     | '/{-$orgSlug}/policies'
     | '/{-$orgSlug}/secrets'
+    | '/{-$orgSlug}/statistics'
     | '/{-$orgSlug}/toolkits'
     | '/{-$orgSlug}/tools'
     | '/{-$orgSlug}/'
@@ -214,6 +226,7 @@ export interface RootRouteChildren {
   DotDotDotDotDotDotReactSrcRoutesArtifactsRoute: typeof DotDotDotDotDotDotReactSrcRoutesArtifactsRouteWithChildren
   DotDotDotDotDotDotReactSrcRoutesPoliciesRoute: typeof DotDotDotDotDotDotReactSrcRoutesPoliciesRoute
   SecretsRoute: typeof SecretsRoute
+  StatisticsRoute: typeof StatisticsRoute
   DotDotDotDotDotDotReactSrcRoutesToolkitsRoute: typeof DotDotDotDotDotDotReactSrcRoutesToolkitsRouteWithChildren
   DotDotDotDotDotDotReactSrcRoutesToolsRoute: typeof DotDotDotDotDotDotReactSrcRoutesToolsRoute
   DotDotDotDotDotDotReactSrcRoutesIndexRoute: typeof DotDotDotDotDotDotReactSrcRoutesIndexRoute
@@ -253,6 +266,13 @@ declare module '@tanstack/react-router' {
       path: '/{-$orgSlug}/secrets'
       fullPath: '/{-$orgSlug}/secrets'
       preLoaderRoute: typeof SecretsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/{-$orgSlug}/statistics': {
+      id: '/{-$orgSlug}/statistics'
+      path: '/{-$orgSlug}/statistics'
+      fullPath: '/{-$orgSlug}/statistics'
+      preLoaderRoute: typeof StatisticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/{-$orgSlug}/toolkits': {
@@ -364,6 +384,7 @@ const rootRouteChildren: RootRouteChildren = {
   DotDotDotDotDotDotReactSrcRoutesPoliciesRoute:
     DotDotDotDotDotDotReactSrcRoutesPoliciesRoute,
   SecretsRoute: SecretsRoute,
+  StatisticsRoute: StatisticsRoute,
   DotDotDotDotDotDotReactSrcRoutesToolkitsRoute:
     DotDotDotDotDotDotReactSrcRoutesToolkitsRouteWithChildren,
   DotDotDotDotDotDotReactSrcRoutesToolsRoute:

@@ -186,6 +186,8 @@ function executorApiPlugin(): Plugin {
                 ? handlers.mcp.handlePausedRequest
                 : handlers.mcp.handleApprovalRequest;
             response = await handler(webRequest(rawUrl));
+          } else if (pathOnly === "/api/stats") {
+            response = await handlers.stats(webRequest(rawUrl));
           } else {
             const awaitMatch = /^\/api\/oauth\/await\/([^/?#]+)$/.exec(pathOnly);
             if (awaitMatch && req.method === "GET") {

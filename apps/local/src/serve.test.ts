@@ -32,6 +32,7 @@ const testHandlers = () => ({
     handlePausedRequest: async () => new Response("ok"),
     close: async () => {},
   },
+  stats: async () => new Response("{}"),
 });
 
 const startTestServer = async (

@@ -459,6 +459,12 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Server
           return withCors(await handler(req));
         }
 
+        // Local usage statistics for the web UI's Statistics page. Local-only
+        // and outside the typed API, like the MCP session routes above.
+        if (url.pathname === "/api/stats") {
+          return withCors(await handlers.stats(req));
+        }
+
         // OAuth result polling — local-only, served outside the typed API
         // because cloud (Cloudflare Workers, stateless) can't back the
         // in-memory store. See setOAuthCompletionListener above.

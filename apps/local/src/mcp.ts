@@ -31,6 +31,13 @@ import {
 } from "@executor-js/execution";
 
 import { startIntegrationsRefresh } from "./integrations";
+import {
+  estimateDefinitionTokens,
+  type CatalogEstimate,
+  type LocalStats,
+  type StatsSession,
+  type ToolDefinition,
+} from "./stats";
 
 type AnyExecutionEngine = ExecutionEngine<Cause.YieldableError>;
 
@@ -50,12 +57,17 @@ export type McpRequestHandler = {
 export interface LocalMcpServerConfig {
   readonly config: ExecutorMcpServerConfig;
   readonly close?: () => Promise<void>;
+  /** Estimate of this resource's catalog, for the session's tokens-saved stat. */
+  readonly estimateCatalog?: () => Promise<CatalogEstimate>;
 }
 
 export interface LocalMcpRequestHandlerConfig {
   readonly defaultConfig: ExecutorMcpServerConfig;
+  /** Builds each session's server config. `stats` is the session's recorder
+   *  when `stats` is configured below: bind it into the session's engine. */
   readonly createConfigForResource?: (
     resource: McpResource,
+    stats: StatsSession | undefined,
   ) => Promise<LocalMcpServerConfig> | LocalMcpServerConfig;
   /**
    * Pinned public origin for browser-approval URLs. When set (for example
@@ -65,7 +77,18 @@ export interface LocalMcpRequestHandlerConfig {
    * ephemeral bind placeholder) is treated as unset.
    */
   readonly webBaseUrl?: string;
+  /** Local usage statistics. Each MCP session records under its client's
+   *  `clientInfo`, plus the size of the `tools/list` it was served. */
+  readonly stats?: LocalStats;
 }
+
+/** The tool list in a `tools/list` JSON-RPC result, if `message` is one. */
+const listedTools = (message: unknown): ReadonlyArray<ToolDefinition> | null => {
+  if (typeof message !== "object" || message === null || !("result" in message)) return null;
+  const result = message.result;
+  if (typeof result !== "object" || result === null || !("tools" in result)) return null;
+  return Array.isArray(result.tools) ? result.tools : null;
+};
 
 // Local serves these error bodies in-process; like the self-host store they are
 // INNER responses (no CORS) — byte-identical to the prior hand-rolled copy
@@ -164,11 +187,6 @@ export const createMcpRequestHandler = (
         )
       : Promise.resolve(null);
 
-  const configForResource = async (resource: McpResource): Promise<LocalMcpServerConfig> => {
-    if (!handlerConfig.createConfigForResource) return { config: handlerConfig.defaultConfig };
-    return handlerConfig.createConfigForResource(resource);
-  };
-
   const dispose = async (id: string, opts: { transport?: boolean; server?: boolean } = {}) => {
     const t = transports.get(id);
     const s = servers.get(id);
@@ -240,7 +258,42 @@ export const createMcpRequestHandler = (
       // oxlint-disable-next-line executor/no-try-catch-or-throw -- boundary: MCP SDK handler must return JSON-RPC errors from thrown Promise APIs
       try {
         const elicitationMode = readElicitationMode(request);
-        resourceConfig = await configForResource(resource);
+        // Resolved lazily (first recorded activity), after `initialize` has
+        // told the server which client this is.
+        const statsSession = handlerConfig.stats?.session(() => {
+          const client = created?.server.getClientVersion();
+          return {
+            agent: client?.name ?? "unknown",
+            agentVersion: client?.version ?? null,
+            plane: "mcp",
+            toolkit: resource.kind !== "default",
+          };
+        });
+        resourceConfig = handlerConfig.createConfigForResource
+          ? await handlerConfig.createConfigForResource(resource, statsSession)
+          : { config: handlerConfig.defaultConfig };
+        const estimateCatalog = resourceConfig.estimateCatalog;
+        if (statsSession && estimateCatalog) {
+          // Observe the session's first `tools/list` result exactly as sent:
+          // that is the context this client actually loaded from Executor.
+          let listed = false;
+          const send = transport.send.bind(transport);
+          transport.send = (message, options) => {
+            const tools = listed ? null : listedTools(message);
+            if (tools) {
+              listed = true;
+              Effect.runFork(
+                Effect.tryPromise(estimateCatalog).pipe(
+                  Effect.map((catalog) =>
+                    statsSession.recordToolsListed(estimateDefinitionTokens(tools), catalog),
+                  ),
+                  Effect.ignore,
+                ),
+              );
+            }
+            return send(message, options);
+          };
+        }
         created = await Effect.runPromise(
           createExecutorMcpServer({
             ...resourceConfig.config,

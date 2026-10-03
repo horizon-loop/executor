@@ -9,6 +9,7 @@ export {
   type PausedExecution,
   type PausedExecutionDeadline,
   type ResumeResponse,
+  type ToolCallEvent,
 } from "./engine";
 
 export {
