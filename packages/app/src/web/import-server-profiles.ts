@@ -1,9 +1,5 @@
 import { Encoding, Option, Result, Schema } from "effect";
 import {
-  getExecutorServerConnection,
-  setExecutorServerConnection,
-} from "@executor-js/react/api/server-connection";
-import {
   readExecutorServerProfiles,
   upsertExecutorServerProfile,
   writeExecutorServerProfiles,
@@ -57,23 +53,24 @@ export const importServerProfilesFromFragment = (): void => {
   const storage = globalThis.window.localStorage;
   let snapshot = readExecutorServerProfiles(storage);
   for (const server of servers.value) {
+    // A name edited in the web UI wins over the profile name from the script;
+    // the "host:port" fallback the switcher saves by default does not count.
+    const existing = snapshot.profiles.find((profile) => profile.origin === server.origin);
+    const keptName =
+      existing?.displayName && existing.displayName !== server.origin.replace(/^https?:\/\//, "")
+        ? existing.displayName
+        : server.name;
     snapshot =
       upsertExecutorServerProfile(
         snapshot,
         {
           kind: "http",
           origin: server.origin,
-          displayName: server.name,
+          displayName: keptName,
           auth: { kind: "bearer", token: server.token },
         },
         { makeActive: false },
       ) ?? snapshot;
   }
   writeExecutorServerProfiles(storage, snapshot);
-
-  // The server menu re-saves the live connection on load; give it the
-  // imported name too, or it overwrites that entry with "host:port".
-  const current = getExecutorServerConnection();
-  const self = servers.value.find((server) => server.origin === current.origin);
-  if (self) setExecutorServerConnection({ ...current, displayName: self.name });
 };
